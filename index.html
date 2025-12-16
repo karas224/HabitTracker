@@ -1,1 +1,752 @@
-<!DOCTYPE html> <html lang="de"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <meta name="theme-color" content="#000000"> <title>Habit Tracker</title> <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkhhYml0IFRyYWNrZXIiLAogICJzaG9ydF9uYW1lIjogIkhhYml0cyIsCiAgInN0YXJ0X3VybCI6ICIvIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjZmZmZmZmIiwKICAidGhlbWVfY29sb3IiOiAiIzAwMDAwMCIsCiAgImljb25zIjogW10KfQ=="> <style> * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif; background: #ffffff; min-height: 100vh; padding: 0; color: #000000; } .container { max-width: 600px; margin: 0 auto; padding: 20px; } header { padding: 40px 0 30px; border-bottom: 1px solid #e5e5e5; margin-bottom: 30px; } h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; color: #000000; } .subtitle { font-size: 15px; color: #8e8e93; margin-top: 4px; font-weight: 400; } .add-habit { margin-bottom: 30px; } .input-group { display: flex; gap: 8px; } input[type="text"] { flex: 1; padding: 12px 16px; border: 1px solid #d1d1d6; border-radius: 10px; font-size: 16px; background: #ffffff; color: #000000; transition: border-color 0.2s; } input[type="text"]:focus { outline: none; border-color: #000000; } input[type="text"]::placeholder { color: #c7c7cc; } button { padding: 12px 20px; background: #000000; color: #ffffff; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; } button:active { opacity: 0.7; } .habits-list { display: flex; flex-direction: column; gap: 12px; } .habit-card { background: #ffffff; border: 1px solid #e5e5e5; border-radius: 12px; overflow: hidden; } .growth-visual { height: 180px; background: #fafafa; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; } .growth-canvas { width: 100%; height: 100%; } .habit-content { padding: 20px; } .habit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; } .habit-name { font-size: 17px; font-weight: 600; color: #000000; letter-spacing: -0.3px; } .habit-info { display: flex; gap: 12px; align-items: center; } .habit-streak { font-size: 14px; color: #8e8e93; font-weight: 500; } .habit-stage { font-size: 12px; color: #000000; background: #f2f2f7; padding: 4px 10px; border-radius: 6px; font-weight: 600; } .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 16px; } .day { aspect-ratio: 1; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; background: #f2f2f7; color: #8e8e93; border: 1px solid transparent; } .day.completed { background: #000000; color: #ffffff; } .day.today { border: 1px solid #000000; } .day:active { transform: scale(0.95); } .habit-actions { display: flex; gap: 8px; padding-top: 16px; border-top: 1px solid #f2f2f7; } .btn-check { flex: 1; background: #000000; font-size: 15px; } .btn-check.completed { background: #f2f2f7; color: #000000; } .btn-delete { background: #f2f2f7; color: #000000; padding: 12px 16px; font-size: 15px; } .stats { display: flex; justify-content: space-between; padding: 12px 0; margin-bottom: 4px; } .stat-item { text-align: center; flex: 1; } .stat-value { font-size: 22px; font-weight: 700; color: #000000; letter-spacing: -0.5px; } .stat-label { color: #8e8e93; font-size: 12px; margin-top: 2px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; } .empty-state { text-align: center; padding: 80px 20px; } .empty-state h2 { font-size: 20px; margin-bottom: 8px; color: #000000; font-weight: 600; } .empty-state p { color: #8e8e93; font-size: 15px; } @media (max-width: 600px) { .container { padding: 16px; } header { padding: 30px 0 20px; } h1 { font-size: 24px; } } </style> </head> <body> <div class="container"> <header> <h1>Habits</h1> <div class="subtitle">Watch your progress grow</div> </header> <div class="add-habit"> <div class="input-group"> <input type="text" id="habitInput" placeholder="Add new habit"> <button onclick="addHabit()">Add</button> </div> </div> <div id="habitsList" class="habits-list"></div> </div> <script> let habits = JSON.parse(localStorage.getItem('habits')) || []; const stages = [ { min: 0, max: 7, name: 'Seed', description: 'Beginning' }, { min: 8, max: 14, name: 'Sprout', description: 'Taking root' }, { min: 15, max: 21, name: 'Seedling', description: 'Growing' }, { min: 22, max: 30, name: 'Plant', description: 'Developing' }, { min: 31, max: 40, name: 'Bush', description: 'Strengthening' }, { min: 41, max: 50, name: 'Tree', description: 'Maturing' }, { min: 51, max: 60, name: 'Forest', description: 'Flourishing' }, { min: 61, max: Infinity, name: 'Ecosystem', description: 'Complete' } ]; function getStage(streak) { return stages.find(s => streak >= s.min && streak <= s.max); } function drawGrowth(canvas, streak) { const ctx = canvas.getContext('2d'); const w = canvas.width; const h = canvas.height; ctx.clearRect(0, 0, w, h); const stage = getStage(streak); const progress = Math.min((streak - stage.min) / (stage.max - stage.min), 1); ctx.strokeStyle = '#000000'; ctx.fillStyle = '#000000'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const centerX = w / 2; const baseY = h - 20; if (streak === 0) { ctx.beginPath(); ctx.arc(centerX, baseY - 5, 3, 0, Math.PI * 2); ctx.fill(); return; } if (streak <= 7) { const stemHeight = 15 + (progress * 15); ctx.beginPath(); ctx.moveTo(centerX, baseY); ctx.lineTo(centerX, baseY - stemHeight); ctx.stroke(); ctx.beginPath(); ctx.arc(centerX, baseY - stemHeight, 2, 0, Math.PI * 2); ctx.fill(); } else if (streak <= 14) { const stemHeight = 30 + (progress * 20); ctx.beginPath(); ctx.moveTo(centerX, baseY); ctx.lineTo(centerX, baseY - stemHeight); ctx.stroke(); const leafSize = 8 + (progress * 8); ctx.beginPath(); ctx.ellipse(centerX - 10, baseY - stemHeight * 0.6, leafSize, leafSize * 0.6, -Math.PI / 4, 0, Math.PI * 2); ctx.fill(); if (progress > 0.5) { ctx.beginPath(); ctx.ellipse(centerX + 10, baseY - stemHeight * 0.7, leafSize, leafSize * 0.6, Math.PI / 4, 0, Math.PI * 2); ctx.fill(); } } else if (streak <= 21) { const stemHeight = 50 + (progress * 20); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(centerX, baseY); ctx.lineTo(centerX, baseY - stemHeight); ctx.stroke(); const branches = 3 + Math.floor(progress * 2); for (let i = 0; i < branches; i++) { const branchY = baseY - stemHeight * (0.4 + i * 0.15); const branchX = (i % 2 === 0 ? -1 : 1) * (15 + progress * 10); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(centerX, branchY); ctx.lineTo(centerX + branchX, branchY - 10); ctx.stroke(); ctx.beginPath(); ctx.arc(centerX + branchX, branchY - 10, 6, 0, Math.PI * 2); ctx.fill(); } } else if (streak <= 30) { const stemHeight = 70 + (progress * 20); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(centerX, baseY); ctx.lineTo(centerX, baseY - stemHeight); ctx.stroke(); const branches = 5 + Math.floor(progress * 3); for (let i = 0; i < branches; i++) { const branchY = baseY - stemHeight * (0.3 + i * 0.1); const side = (i % 2 === 0 ? -1 : 1); const branchLength = 20 + progress * 15; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(centerX, branchY); ctx.quadraticCurveTo( centerX + side * branchLength * 0.7, branchY - 15, centerX + side * branchLength, branchY - 20 ); ctx.stroke(); for (let j = 0; j < 3; j++) { const leafX = centerX + side * branchLength * (0.4 + j * 0.3); const leafY = branchY - 10 - j * 5; ctx.beginPath(); ctx.arc(leafX, leafY, 5 + progress * 3, 0, Math.PI * 2); ctx.fill(); } } } else if (streak <= 40) { const stemHeight = 90 + (progress * 20); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(centerX, baseY); ctx.lineTo(centerX, baseY - stemHeight); ctx.stroke(); function drawBranch(startX, startY, length, angle, depth) { if (depth === 0 || length < 5) return; const endX = startX + Math.cos(angle) * length; const endY = startY + Math.sin(angle) * length; ctx.lineWidth = Math.max(2, depth); ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke(); if (depth <= 2) { for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(endX + (Math.random() - 0.5) * 10, endY + (Math.random() - 0.5) * 10, 4, 0, Math.PI * 2); ctx.fill(); } } drawBranch(endX, endY, length * 0.7, angle - 0.4, depth - 1); drawBranch(endX, endY, length * 0.7, angle + 0.4, depth - 1); } const branches = Math.floor(3 + progress * 2); for (let i = 0; i < branches; i++) { const branchY = baseY - stemHeight * (0.5 + i * 0.15); const side = (i % 2 === 0 ? -1 : 1); drawBranch(centerX, branchY, 25 + progress * 10, side * Math.PI / 3, 2); } } else if (streak <= 50) { const stemHeight = 110; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(centerX, baseY); ctx.lineTo(centerX, baseY - stemHeight); ctx.stroke(); function drawFullBranch(startX, startY, length, angle, depth) { if (depth === 0 || length < 8) { for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(startX + (Math.random() - 0.5) * 15, startY + (Math.random() - 0.5) * 15, 3 + Math.random() * 3, 0, Math.PI * 2); ctx.fill(); } return; } const endX = startX + Math.cos(angle) * length; const endY = startY + Math.sin(angle) * length; ctx.lineWidth = Math.max(2, depth + 1); ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke(); drawFullBranch(endX, endY, length * 0.65, angle - 0.5, depth - 1); drawFullBranch(endX, endY, length * 0.65, angle + 0.5, depth - 1); } for (let i = 0; i < 4; i++) { const branchY = baseY - stemHeight * (0.4 + i * 0.15); const side = (i % 2 === 0 ? -1 : 1); drawFullBranch(centerX, branchY, 35, side * Math.PI / 2.5, 3); } } else if (streak <= 60) { for (let t = 0; t < 3; t++) { const offsetX = (t - 1) * 40; const treeHeight = 100 + t * 10; ctx.lineWidth = 5 - t; ctx.beginPath(); ctx.moveTo(centerX + offsetX, baseY); ctx.lineTo(centerX + offsetX, baseY - treeHeight); ctx.stroke(); function drawTreeBranches(x, y, len, angle, depth) { if (depth === 0 || len < 5) { for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(x + (Math.random() - 0.5) * 12, y + (Math.random() - 0.5) * 12, 2 + Math.random() * 2, 0, Math.PI * 2); ctx.fill(); } return; } const endX = x + Math.cos(angle) * len; const endY = y + Math.sin(angle) * len; ctx.lineWidth = Math.max(1, depth); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(endX, endY); ctx.stroke(); drawTreeBranches(endX, endY, len * 0.7, angle - 0.4, depth - 1); drawTreeBranches(endX, endY, len * 0.7, angle + 0.4, depth - 1); } for (let i = 0; i < 3; i++) { const brY = baseY - treeHeight * (0.5 + i * 0.15); drawTreeBranches(centerX + offsetX, brY, 20 - t * 3, -Math.PI / 3, 2); drawTreeBranches(centerX + offsetX, brY, 20 - t * 3, -Math.PI / 3 * 2, 2); } } } else { for (let t = 0; t < 5; t++) { const offsetX = (t - 2) * 35 + (Math.random() - 0.5) * 10; const treeHeight = 80 + Math.random() * 40; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(centerX + offsetX, baseY); ctx.lineTo(centerX + offsetX, baseY - treeHeight); ctx.stroke(); for (let i = 0; i < 20; i++) { ctx.beginPath(); ctx.arc( centerX + offsetX + (Math.random() - 0.5) * 30, baseY - treeHeight * 0.3 - Math.random() * treeHeight * 0.6, 2 + Math.random() * 3, 0, Math.PI * 2 ); ctx.fill(); } } } } function saveHabits() { localStorage.setItem('habits', JSON.stringify(habits)); } function addHabit() { const input = document.getElementById('habitInput'); const name = input.value.trim(); if (name) { habits.push({ id: Date.now(), name: name, completedDates: [], createdAt: new Date().toISOString() }); saveHabits(); input.value = ''; renderHabits(); } } function deleteHabit(id) { if (confirm('Delete this habit?')) { habits = habits.filter(h => h.id !== id); saveHabits(); renderHabits(); } } function toggleDay(habitId, dateStr) { const habit = habits.find(h => h.id === habitId); const index = habit.completedDates.indexOf(dateStr); if (index > -1) { habit.completedDates.splice(index, 1); } else { habit.completedDates.push(dateStr); } saveHabits(); renderHabits(); } function checkToday(habitId) { const today = new Date().toISOString().split('T')[0]; toggleDay(habitId, today); } function getDateString(daysAgo) { const date = new Date(); date.setDate(date.getDate() - daysAgo); return date.toISOString().split('T')[0]; } function calculateStreak(completedDates) { const sorted = completedDates.sort().reverse(); let streak = 0; for (let i = 0; i < sorted.length; i++) { const expectedDate = getDateString(i); if (sorted[i] === expectedDate) { streak++; } else { break; } } return streak; } function renderHabits() { const container = document.getElementById('habitsList'); if (habits.length === 0) { container.innerHTML = ` <div class="empty-state"> <h2>No habits yet</h2> <p>Add your first habit to start your journey</p> </div> `; return; } container.innerHTML = habits.map(habit => { const streak = calculateStreak(habit.completedDates); const totalDays = habit.completedDates.length; const today = new Date().toISOString().split('T')[0]; const completedToday = habit.completedDates.includes(today); const stage = getStage(streak); const days = []; for (let i = 13; i >= 0; i--) { const dateStr = getDateString(i); const isCompleted = habit.completedDates.includes(dateStr); const isToday = dateStr === today; const dayNum = new Date(dateStr).getDate(); days.push(` <div class="day ${isCompleted ? 'completed' : ''} ${isToday ? 'today' : ''}" onclick="toggleDay(${habit.id}, '${dateStr}')"> ${dayNum} </div> `); } return ` <div class="habit-card"> <div class="growth-visual"> <canvas class="growth-canvas" id="canvas-${habit.id}" width="400" height="180"></canvas> </div> <div class="habit-content"> <div class="habit-header"> <div class="habit-name">${habit.name}</div> <div class="habit-info"> <div class="habit-stage">${stage.name}</div> <div class="habit-streak">${streak} days</div> </div> </div> <div class="calendar"> ${days.join('')} </div> <div class="stats"> <div class="stat-item"> <div class="stat-value">${totalDays}</div> <div class="stat-label">Total</div> </div> <div class="stat-item"> <div class="stat-value">${streak}</div> <div class="stat-label">Streak</div> </div> <div class="stat-item"> <div class="stat-value">${completedToday ? '✓' : '—'}</div> <div class="stat-label">Today</div> </div> </div> <div class="habit-actions"> <button class="btn-check ${completedToday ? 'completed' : ''}" onclick="checkToday(${habit.id})"> ${completedToday ? 'Completed' : 'Mark complete'} </button> <button class="btn-delete" onclick="deleteHabit(${habit.id})">Delete</button> </div> </div> </div> `; }).join(''); habits.forEach(habit => { const canvas = document.getElementById(`canvas-${habit.id}`); if (canvas) { const streak = calculateStreak(habit.completedDates); drawGrowth(canvas, streak); } }); } document.getElementById('habitInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') addHabit(); }); if ('serviceWorker' in navigator) { const swCode = ` self.addEventListener('install', (e) => { self.skipWaiting(); }); self.addEventListener('activate', (e) => { self.clients.claim(); }); self.addEventListener('fetch', (e) => { e.respondWith( caches.match(e.request).then(response => { return response || fetch(e.request); }) ); }); `; const blob = new Blob([swCode], { type: 'application/javascript' }); const swUrl = URL.createObjectURL(blob); navigator.serviceWorker.register(swUrl); } renderHabits(); </script> </body> </html>
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#000000">
+    <title>Habit Tracker</title>
+    <link rel="manifest"
+        href="data:application/json;base64,ewogICJuYW1lIjogIkhhYml0IFRyYWNrZXIiLAogICJzaG9ydF9uYW1lIjogIkhhYml0cyIsCiAgInN0YXJ0X3VybCI6ICIvIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjZmZmZmZmIiwKICAidGhlbWVfY29sb3IiOiAiIzAwMDAwMCIsCiAgImljb25zIjogW10KfQ==">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            background: #ffffff;
+            min-height: 100vh;
+            padding: 0;
+            color: #000000;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            padding: 40px 0 30px;
+            border-bottom: 1px solid #e5e5e5;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: #000000;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: #8e8e93;
+            margin-top: 4px;
+            font-weight: 400;
+        }
+
+        .add-habit {
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #d1d1d6;
+            border-radius: 10px;
+            font-size: 16px;
+            background: #ffffff;
+            color: #000000;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #000000;
+        }
+
+        input[type="text"]::placeholder {
+            color: #c7c7cc;
+        }
+
+        button {
+            padding: 12px 20px;
+            background: #000000;
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:active {
+            opacity: 0.7;
+        }
+
+        .habits-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .habit-card {
+            background: #ffffff;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .growth-visual {
+            height: 180px;
+            background: #fafafa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .growth-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .habit-content {
+            padding: 20px;
+        }
+
+        .habit-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .habit-name {
+            font-size: 17px;
+            font-weight: 600;
+            color: #000000;
+            letter-spacing: -0.3px;
+        }
+
+        .habit-info {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .habit-streak {
+            font-size: 14px;
+            color: #8e8e93;
+            font-weight: 500;
+        }
+
+        .habit-stage {
+            font-size: 12px;
+            color: #000000;
+            background: #f2f2f7;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+
+        .day {
+            aspect-ratio: 1;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: #f2f2f7;
+            color: #8e8e93;
+            border: 1px solid transparent;
+        }
+
+        .day.completed {
+            background: #000000;
+            color: #ffffff;
+        }
+
+        .day.today {
+            border: 1px solid #000000;
+        }
+
+        .day:active {
+            transform: scale(0.95);
+        }
+
+        .habit-actions {
+            display: flex;
+            gap: 8px;
+            padding-top: 16px;
+            border-top: 1px solid #f2f2f7;
+        }
+
+        .btn-check {
+            flex: 1;
+            background: #000000;
+            font-size: 15px;
+        }
+
+        .btn-check.completed {
+            background: #f2f2f7;
+            color: #000000;
+        }
+
+        .btn-delete {
+            background: #f2f2f7;
+            color: #000000;
+            padding: 12px 16px;
+            font-size: 15px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            margin-bottom: 4px;
+        }
+
+        .stat-item {
+            text-align: center;
+            flex: 1;
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #000000;
+            letter-spacing: -0.5px;
+        }
+
+        .stat-label {
+            color: #8e8e93;
+            font-size: 12px;
+            margin-top: 2px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+        }
+
+        .empty-state h2 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: #000000;
+            font-weight: 600;
+        }
+
+        .empty-state p {
+            color: #8e8e93;
+            font-size: 15px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 16px;
+            }
+
+            header {
+                padding: 30px 0 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Habits</h1>
+            <div class="subtitle">Watch your progress grow</div>
+            <div class="data-controls" style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
+                <button onclick="exportData()"
+                    style="padding: 8px 16px; font-size: 14px; background: #f2f2f7; color: #000000;">Export
+                    Data</button>
+                <button onclick="document.getElementById('importInput').click()"
+                    style="padding: 8px 16px; font-size: 14px; background: #f2f2f7; color: #000000;">Import
+                    Data</button>
+                <input type="file" id="importInput" style="display: none" onchange="importData(this)" accept=".json">
+            </div>
+        </header>
+        <div class="add-habit">
+            <div class="input-group">
+                <input type="text" id="habitInput" placeholder="Add new habit">
+                <button onclick="addHabit()">Add</button>
+            </div>
+        </div>
+        <div id="habitsList" class="habits-list"></div>
+    </div>
+    <script>
+        let habits = JSON.parse(localStorage.getItem('habits')) || [];
+
+        function exportData() {
+            const dataStr = JSON.stringify(habits, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+            const exportFileDefaultName = 'habits-backup-' + new Date().toISOString().split('T')[0] + '.json';
+
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+
+        function importData(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (Array.isArray(data)) {
+                        if (confirm('This will overwrite your current habits. Are you sure?')) {
+                            habits = data;
+                            saveHabits();
+                            renderHabits();
+                            alert('Data imported successfully!');
+                        }
+                    } else {
+                        alert('Invalid data format');
+                    }
+                } catch (error) {
+                    alert('Error reading file');
+                    console.error(error);
+                }
+                input.value = ''; // Reset input
+            };
+            reader.readAsText(file);
+        }
+
+        const stages = [
+            { min: 0, max: 7, name: 'Seed', description: 'Beginning' },
+            { min: 8, max: 14, name: 'Sprout', description: 'Taking root' },
+            { min: 15, max: 21, name: 'Seedling', description: 'Growing' },
+            { min: 22, max: 30, name: 'Plant', description: 'Developing' },
+            { min: 31, max: 40, name: 'Bush', description: 'Strengthening' },
+            { min: 41, max: 50, name: 'Tree', description: 'Maturing' },
+            { min: 51, max: 60, name: 'Forest', description: 'Flourishing' },
+            { min: 61, max: Infinity, name: 'Ecosystem', description: 'Complete' }
+        ];
+
+        function getStage(streak) {
+            return stages.find(s => streak >= s.min && streak <= s.max);
+        }
+
+        function drawGrowth(canvas, streak) {
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+            const stage = getStage(streak);
+            const progress = Math.min((streak - stage.min) / (stage.max - stage.min), 1);
+            ctx.strokeStyle = '#000000';
+            ctx.fillStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            const centerX = w / 2;
+            const baseY = h - 20;
+
+            if (streak === 0) {
+                ctx.beginPath();
+                ctx.arc(centerX, baseY - 5, 3, 0, Math.PI * 2);
+                ctx.fill();
+                return;
+            }
+
+            if (streak <= 7) {
+                const stemHeight = 15 + (progress * 15);
+                ctx.beginPath();
+                ctx.moveTo(centerX, baseY);
+                ctx.lineTo(centerX, baseY - stemHeight);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(centerX, baseY - stemHeight, 2, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (streak <= 14) {
+                const stemHeight = 30 + (progress * 20);
+                ctx.beginPath();
+                ctx.moveTo(centerX, baseY);
+                ctx.lineTo(centerX, baseY - stemHeight);
+                ctx.stroke();
+                const leafSize = 8 + (progress * 8);
+                ctx.beginPath();
+                ctx.ellipse(centerX - 10, baseY - stemHeight * 0.6, leafSize, leafSize * 0.6, -Math.PI / 4, 0, Math.PI * 2);
+                ctx.fill();
+                if (progress > 0.5) {
+                    ctx.beginPath();
+                    ctx.ellipse(centerX + 10, baseY - stemHeight * 0.7, leafSize, leafSize * 0.6, Math.PI / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            } else if (streak <= 21) {
+                const stemHeight = 50 + (progress * 20);
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(centerX, baseY);
+                ctx.lineTo(centerX, baseY - stemHeight);
+                ctx.stroke();
+                const branches = 3 + Math.floor(progress * 2);
+                for (let i = 0; i < branches; i++) {
+                    const branchY = baseY - stemHeight * (0.4 + i * 0.15);
+                    const branchX = (i % 2 === 0 ? -1 : 1) * (15 + progress * 10);
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, branchY);
+                    ctx.lineTo(centerX + branchX, branchY - 10);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(centerX + branchX, branchY - 10, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            } else if (streak <= 30) {
+                const stemHeight = 70 + (progress * 20);
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(centerX, baseY);
+                ctx.lineTo(centerX, baseY - stemHeight);
+                ctx.stroke();
+                const branches = 5 + Math.floor(progress * 3);
+                for (let i = 0; i < branches; i++) {
+                    const branchY = baseY - stemHeight * (0.3 + i * 0.1);
+                    const side = (i % 2 === 0 ? -1 : 1);
+                    const branchLength = 20 + progress * 15;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, branchY);
+                    ctx.quadraticCurveTo(
+                        centerX + side * branchLength * 0.7, branchY - 15,
+                        centerX + side * branchLength, branchY - 20
+                    );
+                    ctx.stroke();
+                    for (let j = 0; j < 3; j++) {
+                        const leafX = centerX + side * branchLength * (0.4 + j * 0.3);
+                        const leafY = branchY - 10 - j * 5;
+                        ctx.beginPath();
+                        ctx.arc(leafX, leafY, 5 + progress * 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            } else if (streak <= 40) {
+                const stemHeight = 90 + (progress * 20);
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.moveTo(centerX, baseY);
+                ctx.lineTo(centerX, baseY - stemHeight);
+                ctx.stroke();
+
+                function drawBranch(startX, startY, length, angle, depth) {
+                    if (depth === 0 || length < 5) return;
+                    const endX = startX + Math.cos(angle) * length;
+                    const endY = startY + Math.sin(angle) * length;
+                    ctx.lineWidth = Math.max(2, depth);
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    if (depth <= 2) {
+                        for (let i = 0; i < 3; i++) {
+                            ctx.beginPath();
+                            ctx.arc(endX + (Math.random() - 0.5) * 10, endY + (Math.random() - 0.5) * 10, 4, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                    drawBranch(endX, endY, length * 0.7, angle - 0.4, depth - 1);
+                    drawBranch(endX, endY, length * 0.7, angle + 0.4, depth - 1);
+                }
+                const branches = Math.floor(3 + progress * 2);
+                for (let i = 0; i < branches; i++) {
+                    const branchY = baseY - stemHeight * (0.5 + i * 0.15);
+                    const side = (i % 2 === 0 ? -1 : 1);
+                    drawBranch(centerX, branchY, 25 + progress * 10, side * Math.PI / 3, 2);
+                }
+            } else if (streak <= 50) {
+                const stemHeight = 110;
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(centerX, baseY);
+                ctx.lineTo(centerX, baseY - stemHeight);
+                ctx.stroke();
+
+                function drawFullBranch(startX, startY, length, angle, depth) {
+                    if (depth === 0 || length < 8) {
+                        for (let i = 0; i < 5; i++) {
+                            ctx.beginPath();
+                            ctx.arc(startX + (Math.random() - 0.5) * 15, startY + (Math.random() - 0.5) * 15, 3 + Math.random() * 3, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                        return;
+                    }
+                    const endX = startX + Math.cos(angle) * length;
+                    const endY = startY + Math.sin(angle) * length;
+                    ctx.lineWidth = Math.max(2, depth + 1);
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    drawFullBranch(endX, endY, length * 0.65, angle - 0.5, depth - 1);
+                    drawFullBranch(endX, endY, length * 0.65, angle + 0.5, depth - 1);
+                }
+                for (let i = 0; i < 4; i++) {
+                    const branchY = baseY - stemHeight * (0.4 + i * 0.15);
+                    const side = (i % 2 === 0 ? -1 : 1);
+                    drawFullBranch(centerX, branchY, 35, side * Math.PI / 2.5, 3);
+                }
+            } else if (streak <= 60) {
+                for (let t = 0; t < 3; t++) {
+                    const offsetX = (t - 1) * 40;
+                    const treeHeight = 100 + t * 10;
+                    ctx.lineWidth = 5 - t;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX + offsetX, baseY);
+                    ctx.lineTo(centerX + offsetX, baseY - treeHeight);
+                    ctx.stroke();
+
+                    function drawTreeBranches(x, y, len, angle, depth) {
+                        if (depth === 0 || len < 5) {
+                            for (let i = 0; i < 4; i++) {
+                                ctx.beginPath();
+                                ctx.arc(x + (Math.random() - 0.5) * 12, y + (Math.random() - 0.5) * 12, 2 + Math.random() * 2, 0, Math.PI * 2);
+                                ctx.fill();
+                            }
+                            return;
+                        }
+                        const endX = x + Math.cos(angle) * len;
+                        const endY = y + Math.sin(angle) * len;
+                        ctx.lineWidth = Math.max(1, depth);
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(endX, endY);
+                        ctx.stroke();
+                        drawTreeBranches(endX, endY, len * 0.7, angle - 0.4, depth - 1);
+                        drawTreeBranches(endX, endY, len * 0.7, angle + 0.4, depth - 1);
+                    }
+                    for (let i = 0; i < 3; i++) {
+                        const brY = baseY - treeHeight * (0.5 + i * 0.15);
+                        drawTreeBranches(centerX + offsetX, brY, 20 - t * 3, -Math.PI / 3, 2);
+                        drawTreeBranches(centerX + offsetX, brY, 20 - t * 3, -Math.PI / 3 * 2, 2);
+                    }
+                }
+            } else {
+                for (let t = 0; t < 5; t++) {
+                    const offsetX = (t - 2) * 35 + (Math.random() - 0.5) * 10;
+                    const treeHeight = 80 + Math.random() * 40;
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.moveTo(centerX + offsetX, baseY);
+                    ctx.lineTo(centerX + offsetX, baseY - treeHeight);
+                    ctx.stroke();
+                    for (let i = 0; i < 20; i++) {
+                        ctx.beginPath();
+                        ctx.arc(
+                            centerX + offsetX + (Math.random() - 0.5) * 30,
+                            baseY - treeHeight * 0.3 - Math.random() * treeHeight * 0.6,
+                            2 + Math.random() * 3,
+                            0, Math.PI * 2
+                        );
+                        ctx.fill();
+                    }
+                }
+            }
+        }
+
+        function saveHabits() {
+            localStorage.setItem('habits', JSON.stringify(habits));
+        }
+
+        function addHabit() {
+            const input = document.getElementById('habitInput');
+            const name = input.value.trim();
+            if (name) {
+                habits.push({
+                    id: Date.now(),
+                    name: name,
+                    completedDates: [],
+                    createdAt: new Date().toISOString()
+                });
+                saveHabits();
+                input.value = '';
+                renderHabits();
+            }
+        }
+
+        function deleteHabit(id) {
+            if (confirm('Delete this habit?')) {
+                habits = habits.filter(h => h.id !== id);
+                saveHabits();
+                renderHabits();
+            }
+        }
+
+        function toggleDay(habitId, dateStr) {
+            const habit = habits.find(h => h.id === habitId);
+            const index = habit.completedDates.indexOf(dateStr);
+            if (index > -1) {
+                habit.completedDates.splice(index, 1);
+            } else {
+                habit.completedDates.push(dateStr);
+            }
+            saveHabits();
+            renderHabits();
+        }
+
+        function checkToday(habitId) {
+            const today = new Date().toISOString().split('T')[0];
+            toggleDay(habitId, today);
+        }
+
+        function getDateString(daysAgo) {
+            const date = new Date();
+            date.setDate(date.getDate() - daysAgo);
+            return date.toISOString().split('T')[0];
+        }
+
+        function calculateStreak(completedDates) {
+            const sorted = completedDates.sort().reverse();
+            let streak = 0;
+            for (let i = 0; i < sorted.length; i++) {
+                const expectedDate = getDateString(i);
+                if (sorted[i] === expectedDate) {
+                    streak++;
+                } else {
+                    break;
+                }
+            }
+            return streak;
+        }
+
+        function renderHabits() {
+            const container = document.getElementById('habitsList');
+            if (habits.length === 0) {
+                container.innerHTML = `
+                <div class="empty-state">
+                    <h2>No habits yet</h2>
+                    <p>Add your first habit to start your journey</p>
+                </div>
+            `;
+                return;
+            }
+            container.innerHTML = habits.map(habit => {
+                const streak = calculateStreak(habit.completedDates);
+                const totalDays = habit.completedDates.length;
+                const today = new Date().toISOString().split('T')[0];
+                const completedToday = habit.completedDates.includes(today);
+                const stage = getStage(streak);
+                const days = [];
+                for (let i = 13; i >= 0; i--) {
+                    const dateStr = getDateString(i);
+                    const isCompleted = habit.completedDates.includes(dateStr);
+                    const isToday = dateStr === today;
+                    const dayNum = new Date(dateStr).getDate();
+                    days.push(`
+                    <div class="day ${isCompleted ? 'completed' : ''} ${isToday ? 'today' : ''}" onclick="toggleDay(${habit.id}, '${dateStr}')">
+                        ${dayNum}
+                    </div>
+                `);
+                }
+                return `
+                <div class="habit-card">
+                    <div class="growth-visual">
+                        <canvas class="growth-canvas" id="canvas-${habit.id}" width="400" height="180"></canvas>
+                    </div>
+                    <div class="habit-content">
+                        <div class="habit-header">
+                            <div class="habit-name">${habit.name}</div>
+                            <div class="habit-info">
+                                <div class="habit-stage">${stage.name}</div>
+                                <div class="habit-streak">${streak} days</div>
+                            </div>
+                        </div>
+                        <div class="calendar">
+                            ${days.join('')}
+                        </div>
+                        <div class="stats">
+                            <div class="stat-item">
+                                <div class="stat-value">${totalDays}</div>
+                                <div class="stat-label">Total</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${streak}</div>
+                                <div class="stat-label">Streak</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">${completedToday ? '✓' : '—'}</div>
+                                <div class="stat-label">Today</div>
+                            </div>
+                        </div>
+                        <div class="habit-actions">
+                            <button class="btn-check ${completedToday ? 'completed' : ''}" onclick="checkToday(${habit.id})">
+                                ${completedToday ? 'Completed' : 'Mark complete'}
+                            </button>
+                            <button class="btn-delete" onclick="deleteHabit(${habit.id})">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            }).join('');
+            habits.forEach(habit => {
+                const canvas = document.getElementById(`canvas-${habit.id}`);
+                if (canvas) {
+                    const streak = calculateStreak(habit.completedDates);
+                    drawGrowth(canvas, streak);
+                }
+            });
+        }
+        document.getElementById('habitInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addHabit();
+        });
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+            self.addEventListener('install', (e) => {
+                self.skipWaiting();
+            });
+            self.addEventListener('activate', (e) => {
+                self.clients.claim();
+            });
+            self.addEventListener('fetch', (e) => {
+                e.respondWith(
+                    caches.match(e.request).then(response => {
+                        return response || fetch(e.request);
+                    })
+                );
+            });
+        `;
+            const blob = new Blob([swCode], {
+                type: 'application/javascript'
+            });
+            const swUrl = URL.createObjectURL(blob);
+            navigator.serviceWorker.register(swUrl);
+        }
+        renderHabits();
+    </script>
+</body>
+
+</html>
